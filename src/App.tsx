@@ -1,40 +1,64 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { mockThreads } from "./data/mockThreads";
 import type { Thread, BucketId, DefaultBucketId } from "./types/thread";
 
-const DEFAULT_BUCKETS: { id: DefaultBucketId; label: string }[] = [
-  { id: "important", label: "Important" },
-  { id: "needs_reply", label: "Needs reply" },
-  { id: "can_wait", label: "Can wait" },
-  { id: "newsletter", label: "Newsletter" },
-  { id: "auto_archive", label: "Auto-archive" },
-  { id: "recruiting", label: "Recruiting" },
-  { id: "receipts", label: "Receipts" },
-  { id: "travel", label: "Travel" },
+const DEFAULT_BUCKETS: { id: DefaultBucketId; label: string; description?: string }[] = [
+  { id: "important", label: "Important", description: "High-priority threads needing awareness or action." },
+  { id: "needs_reply", label: "Needs reply", description: "Threads that likely require a response." },
+  { id: "can_wait", label: "Can wait", description: "Relevant but not urgent." },
+  { id: "newsletter", label: "Newsletter", description: "Recurring informational content." },
+  { id: "auto_archive", label: "Auto-archive", description: "Low-signal promotional or routine updates." },
+  { id: "recruiting", label: "Recruiting", description: "Job applications, recruiters, and interview coordination." },
+  { id: "receipts", label: "Receipts", description: "Transactional billing and purchase confirmations." },
+  { id: "travel", label: "Travel", description: "Flights, hotels, and itinerary details." },
 ];
 
 type CustomBucket = {
   id: string;
   label: string;
+  description: string;
 };
+
+type ToastState = {
+  message: string;
+  tone: "success" | "info";
+} | null;
 
 function App() {
   const [threads, setThreads] = useState<Thread[]>(mockThreads);
   const [selectedBucket, setSelectedBucket] = useState<BucketId | "all">("all");
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(
-    mockThreads[0] ?? null
-  );
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(mockThreads[0] ?? null);
 
   const [customBuckets, setCustomBuckets] = useState<CustomBucket[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
+  const [newBucketDescription, setNewBucketDescription] = useState("");
+  const [toast, setToast] = useState<ToastState>(null);
 
   const allBuckets = [...DEFAULT_BUCKETS, ...customBuckets];
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const bucketLabelMap = useMemo(() => {
     const map: Record<string, string> = {};
     allBuckets.forEach((bucket) => {
       map[bucket.id] = bucket.label;
+    });
+    return map;
+  }, [allBuckets]);
+
+  const bucketDescriptionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    allBuckets.forEach((bucket) => {
+      map[bucket.id] = bucket.description ?? "";
     });
     return map;
   }, [allBuckets]);
@@ -57,6 +81,10 @@ function App() {
     return bucketLabelMap[bucketId] ?? prettifyBucketId(bucketId);
   }
 
+  function formatBucketDescription(bucketId: string) {
+    return bucketDescriptionMap[bucketId] || "User-defined category for inbox triage.";
+  }
+
   function createBucketId(label: string) {
     return label
       .trim()
@@ -65,29 +93,57 @@ function App() {
       .replace(/\s+/g, "_");
   }
 
-  function handleCreateBucket() {
-    const trimmed = newBucketName.trim();
-    if (!trimmed) return;
+  function resetModal() {
+    setIsModalOpen(false);
+    setNewBucketName("");
+    setNewBucketDescription("");
+  }
 
-    const id = createBucketId(trimmed);
+  function handleCreateBucket() {
+    const trimmedName = newBucketName.trim();
+    const trimmedDescription = newBucketDescription.trim();
+
+    if (!trimmedName) return;
+
+    const id = createBucketId(trimmedName);
     const alreadyExists = allBuckets.some((bucket) => bucket.id === id);
 
     if (alreadyExists) {
-      setIsModalOpen(false);
-      setNewBucketName("");
       setSelectedBucket(id);
+      setToast({
+        message: `Bucket "${trimmedName}" already exists. Switched to it.`,
+        tone: "info",
+      });
+      resetModal();
       return;
     }
 
-    const newBucket = { id, label: trimmed };
+    const newBucket = {
+      id,
+      label: trimmedName,
+      description:
+        trimmedDescription || `Custom bucket for emails related to ${trimmedName.toLowerCase()}.`,
+    };
+
     setCustomBuckets((prev) => [...prev, newBucket]);
     setSelectedBucket(id);
-    setIsModalOpen(false);
-    setNewBucketName("");
+    setToast({
+      message: `Created bucket "${trimmedName}".`,
+      tone: "success",
+    });
+    resetModal();
   }
 
   function handleReclassify() {
-    if (customBuckets.length === 0) return;
+    if (customBuckets.length === 0) {
+      setToast({
+        message: "Create a custom bucket first before reclassifying.",
+        tone: "info",
+      });
+      return;
+    }
+
+    let movedCount = 0;
 
     const updatedThreads = threads.map((thread) => {
       const haystack = `${thread.subject} ${thread.snippet} ${thread.from}`.toLowerCase();
@@ -100,11 +156,14 @@ function App() {
         );
 
         if (matchedKeyword) {
+          const didChangeBucket = thread.bucket !== bucket.id;
+          if (didChangeBucket) movedCount += 1;
+
           return {
             ...thread,
             bucket: bucket.id,
             confidence: 88,
-            reason: `Matched custom bucket "${bucket.label}" based on keyword "${matchedKeyword}".`,
+            reason: `Matched custom bucket "${bucket.label}" based on keyword "${matchedKeyword}". ${bucket.description}`,
           };
         }
       }
@@ -119,6 +178,18 @@ function App() {
         (thread) => thread.id === selectedThread.id
       );
       setSelectedThread(refreshedSelectedThread ?? null);
+    }
+
+    if (movedCount > 0) {
+      setToast({
+        message: `Reclassified ${movedCount} thread${movedCount === 1 ? "" : "s"} into custom buckets.`,
+        tone: "success",
+      });
+    } else {
+      setToast({
+        message: "No additional threads matched your custom bucket rules.",
+        tone: "info",
+      });
     }
   }
 
@@ -245,6 +316,15 @@ function App() {
 
               <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Bucket description
+                </p>
+                <p className="text-sm text-slate-300 mt-2">
+                  {formatBucketDescription(selectedThread.bucket)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
                   Snippet
                 </p>
                 <p className="text-sm text-slate-200 mt-2">{selectedThread.snippet}</p>
@@ -279,7 +359,7 @@ function App() {
           <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-5 shadow-2xl">
             <h3 className="text-lg font-semibold">Create new bucket</h3>
             <p className="text-sm text-slate-400 mt-1">
-              Add a custom category, then click Reclassify.
+              Add a custom category and a short description for how the assistant should think about it.
             </p>
 
             <div className="mt-4">
@@ -289,18 +369,28 @@ function App() {
               <input
                 value={newBucketName}
                 onChange={(e) => setNewBucketName(e.target.value)}
-                placeholder="e.g. Finance, Friends, Fitness"
+                placeholder="e.g. Finance, Fitness, Friends"
                 className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400"
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs uppercase tracking-wide text-slate-500">
+                Description
+              </label>
+              <textarea
+                value={newBucketDescription}
+                onChange={(e) => setNewBucketDescription(e.target.value)}
+                placeholder="e.g. Expenses, invoices, receipts, and other money-related updates."
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400 resize-none"
               />
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
               <button
                 className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-900"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setNewBucketName("");
-                }}
+                onClick={resetModal}
               >
                 Cancel
               </button>
@@ -311,6 +401,20 @@ function App() {
                 Create bucket
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`rounded-xl border px-4 py-3 shadow-2xl ${
+              toast.tone === "success"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-slate-700 bg-slate-900 text-slate-200"
+            }`}
+          >
+            <p className="text-sm font-medium">{toast.message}</p>
           </div>
         </div>
       )}
@@ -359,10 +463,20 @@ function getKeywordsForBucket(bucket: CustomBucket) {
     .split(/[\s_-]+/)
     .filter(Boolean);
 
-  const baseKeywords = [bucket.label.toLowerCase(), bucket.id.toLowerCase(), ...labelWords];
+  const descriptionWords = bucket.description
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2);
+
+  const baseKeywords = [
+    bucket.label.toLowerCase(),
+    bucket.id.toLowerCase(),
+    ...labelWords,
+    ...descriptionWords,
+  ];
 
   const specialKeywords: Record<string, string[]> = {
-    finance: ["invoice", "billing", "receipt", "payment", "expense", "charge"],
+    finance: ["invoice", "billing", "receipt", "payment", "expense", "charge", "uber"],
     fitness: ["workout", "gym", "training", "classpass", "run", "health"],
     friends: ["birthday", "dinner", "weekend", "hang", "party", "plans"],
     family: ["mom", "dad", "family", "cousin", "aunt", "uncle"],
