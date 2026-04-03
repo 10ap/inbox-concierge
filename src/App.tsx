@@ -35,6 +35,7 @@ function App() {
   const [newBucketDescription, setNewBucketDescription] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const allBuckets = [...DEFAULT_BUCKETS, ...customBuckets];
 
@@ -84,7 +85,8 @@ function App() {
     if (!query) return bucketFiltered;
 
     return bucketFiltered.filter((thread) => {
-      const haystack = `${thread.subject} ${thread.snippet} ${thread.from} ${formatBucketLabel(thread.bucket)}`.toLowerCase();
+      const haystack =
+        `${thread.subject} ${thread.snippet} ${thread.from} ${formatBucketLabel(thread.bucket)}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [threads, selectedBucket, searchQuery, bucketLabelMap]);
@@ -146,15 +148,7 @@ function App() {
     resetModal();
   }
 
-  function handleReclassify() {
-    if (customBuckets.length === 0) {
-      setToast({
-        message: "Create a custom bucket first before reclassifying.",
-        tone: "info",
-      });
-      return;
-    }
-
+  function applyReclassification() {
     let movedCount = 0;
 
     const updatedThreads = threads.map((thread) => {
@@ -203,6 +197,23 @@ function App() {
         tone: "info",
       });
     }
+
+    setIsReclassifying(false);
+  }
+
+  function handleReclassify() {
+    if (customBuckets.length === 0) {
+      setToast({
+        message: "Create a custom bucket first before reclassifying.",
+        tone: "info",
+      });
+      return;
+    }
+
+    setIsReclassifying(true);
+    window.setTimeout(() => {
+      applyReclassification();
+    }, 1200);
   }
 
   return (
@@ -215,7 +226,10 @@ function App() {
           </p>
         </div>
 
-        <button className="w-full rounded-md bg-emerald-500 hover:bg-emerald-400 text-sm font-medium py-2 text-slate-950 transition">
+        <button
+          disabled={isReclassifying}
+          className="w-full rounded-md bg-emerald-500 hover:bg-emerald-400 text-sm font-medium py-2 text-slate-950 transition disabled:opacity-60 disabled:cursor-not-allowed"
+        >
           Connect Gmail
         </button>
 
@@ -262,16 +276,18 @@ function App() {
 
               <div className="flex gap-2 shrink-0">
                 <button
-                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
+                  disabled={isReclassifying}
+                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => setIsModalOpen(true)}
                 >
                   New bucket
                 </button>
                 <button
-                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
+                  disabled={isReclassifying}
+                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleReclassify}
                 >
-                  Reclassify
+                  {isReclassifying ? "Reclassifying..." : "Reclassify"}
                 </button>
               </div>
             </div>
@@ -281,61 +297,115 @@ function App() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search subject, sender, snippet, or bucket..."
-                className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-emerald-400"
+                disabled={isReclassifying}
+                className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-emerald-400 disabled:opacity-60"
               />
             </div>
           </header>
 
-          <ul className="divide-y divide-slate-800 text-sm">
-            {filteredThreads.map((thread) => (
-              <li
-                key={thread.id}
-                className={`px-4 py-4 cursor-pointer transition hover:bg-slate-900 ${
-                  selectedThread?.id === thread.id ? "bg-slate-900/70" : ""
-                }`}
-                onClick={() => setSelectedThread(thread)}
-              >
-                <div className="flex justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{thread.subject}</span>
-                      {thread.unread && (
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-                      )}
+          {isReclassifying ? (
+            <div className="divide-y divide-slate-800">
+              {Array.from({ length: 7 }).map((_, index) => (
+                <div key={index} className="px-4 py-4 animate-pulse">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-56 rounded bg-slate-800" />
+                      <div className="h-3 w-40 rounded bg-slate-900 mt-3" />
+                      <div className="h-3 w-72 rounded bg-slate-900 mt-2" />
                     </div>
-
-                    <p className="text-xs text-slate-400 truncate mt-1">{thread.from}</p>
-                    <p className="text-xs text-slate-500 truncate mt-1">{thread.snippet}</p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className="text-xs text-slate-400">
-                      {new Date(thread.date).toLocaleDateString()}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wide text-slate-500 mt-2">
-                      {formatBucketLabel(thread.bucket)}
-                    </p>
-                    <p className="text-[11px] text-emerald-400 mt-1">
-                      {thread.confidence}% confidence
-                    </p>
+                    <div className="w-24 shrink-0">
+                      <div className="h-3 w-16 ml-auto rounded bg-slate-800" />
+                      <div className="h-3 w-20 ml-auto rounded bg-slate-900 mt-3" />
+                      <div className="h-3 w-20 ml-auto rounded bg-slate-900 mt-2" />
+                    </div>
                   </div>
                 </div>
-              </li>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-800 text-sm">
+              {filteredThreads.map((thread) => (
+                <li
+                  key={thread.id}
+                  className={`px-4 py-4 cursor-pointer transition hover:bg-slate-900 ${
+                    selectedThread?.id === thread.id ? "bg-slate-900/70" : ""
+                  }`}
+                  onClick={() => setSelectedThread(thread)}
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{thread.subject}</span>
+                        {thread.unread && (
+                          <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                        )}
+                      </div>
 
-            {filteredThreads.length === 0 && (
-              <li className="px-4 py-12 text-center">
-                <p className="text-sm text-slate-400">No threads matched your search.</p>
-                <p className="text-xs text-slate-500 mt-2">
-                  Try another search term or switch buckets.
-                </p>
-              </li>
-            )}
-          </ul>
+                      <p className="text-xs text-slate-400 truncate mt-1">{thread.from}</p>
+                      <p className="text-xs text-slate-500 truncate mt-1">{thread.snippet}</p>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-slate-400">
+                        {new Date(thread.date).toLocaleDateString()}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 mt-2">
+                        {formatBucketLabel(thread.bucket)}
+                      </p>
+                      <p className="text-[11px] text-emerald-400 mt-1">
+                        {thread.confidence}% confidence
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+
+              {filteredThreads.length === 0 && (
+                <li className="px-4 py-12 text-center">
+                  <p className="text-sm text-slate-400">No threads matched your search.</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Try another search term or switch buckets.
+                  </p>
+                </li>
+              )}
+            </ul>
+          )}
         </section>
 
         <section className="w-96 p-5 hidden md:block">
-          {selectedThread ? (
+          {isReclassifying ? (
+            <div className="space-y-4 animate-pulse">
+              <div>
+                <div className="h-7 w-64 rounded bg-slate-800" />
+                <div className="h-4 w-48 rounded bg-slate-900 mt-3" />
+                <div className="h-4 w-32 rounded bg-slate-900 mt-2" />
+                <div className="h-4 w-40 rounded bg-slate-900 mt-2" />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="h-3 w-28 rounded bg-slate-800" />
+                <div className="h-4 w-full rounded bg-slate-900 mt-3" />
+                <div className="h-4 w-4/5 rounded bg-slate-900 mt-2" />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="h-3 w-20 rounded bg-slate-800" />
+                <div className="h-4 w-full rounded bg-slate-900 mt-3" />
+                <div className="h-4 w-3/4 rounded bg-slate-900 mt-2" />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="h-3 w-32 rounded bg-slate-800" />
+                <div className="h-8 w-24 rounded bg-slate-900 mt-3" />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="h-3 w-24 rounded bg-slate-800" />
+                <div className="h-4 w-full rounded bg-slate-900 mt-3" />
+                <div className="h-4 w-5/6 rounded bg-slate-900 mt-2" />
+              </div>
+            </div>
+          ) : selectedThread ? (
             <div className="space-y-4">
               <div>
                 <h3 className="text-xl font-semibold leading-tight">
