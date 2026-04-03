@@ -34,6 +34,7 @@ function App() {
   const [newBucketName, setNewBucketName] = useState("");
   const [newBucketDescription, setNewBucketDescription] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const allBuckets = [...DEFAULT_BUCKETS, ...customBuckets];
 
@@ -72,10 +73,21 @@ function App() {
 
   const totalCount = threads.length;
 
-  const filteredThreads =
-    selectedBucket === "all"
-      ? threads
-      : threads.filter((thread) => thread.bucket === selectedBucket);
+  const filteredThreads = useMemo(() => {
+    const bucketFiltered =
+      selectedBucket === "all"
+        ? threads
+        : threads.filter((thread) => thread.bucket === selectedBucket);
+
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return bucketFiltered;
+
+    return bucketFiltered.filter((thread) => {
+      const haystack = `${thread.subject} ${thread.snippet} ${thread.from} ${formatBucketLabel(thread.bucket)}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [threads, selectedBucket, searchQuery, bucketLabelMap]);
 
   function formatBucketLabel(bucketId: string) {
     return bucketLabelMap[bucketId] ?? prettifyBucketId(bucketId);
@@ -229,31 +241,48 @@ function App() {
 
       <main className="flex-1 flex">
         <section className="flex-1 border-r border-slate-800 flex flex-col">
-          <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-            <div>
-              <h2 className="text-sm font-medium">
-                {selectedBucket === "all"
-                  ? "All threads"
-                  : formatBucketLabel(selectedBucket)}
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                {filteredThreads.length} thread{filteredThreads.length === 1 ? "" : "s"}
-              </p>
+          <header className="px-4 py-3 border-b border-slate-800 space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-medium">
+                  {selectedBucket === "all"
+                    ? "All threads"
+                    : formatBucketLabel(selectedBucket)}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {filteredThreads.length} result{filteredThreads.length === 1 ? "" : "s"}
+                  {searchQuery.trim() ? ` for "${searchQuery}"` : ""}
+                </p>
+                {selectedBucket !== "all" && (
+                  <p className="text-xs text-slate-400 mt-2 max-w-xl">
+                    {formatBucketDescription(selectedBucket)}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 shrink-0">
+                <button
+                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  New bucket
+                </button>
+                <button
+                  className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
+                  onClick={handleReclassify}
+                >
+                  Reclassify
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
-                onClick={() => setIsModalOpen(true)}
-              >
-                New bucket
-              </button>
-              <button
-                className="text-xs border border-slate-700 rounded-md px-3 py-1.5 hover:bg-slate-800 transition"
-                onClick={handleReclassify}
-              >
-                Reclassify
-              </button>
+            <div className="relative">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search subject, sender, snippet, or bucket..."
+                className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-emerald-400"
+              />
             </div>
           </header>
 
@@ -293,6 +322,15 @@ function App() {
                 </div>
               </li>
             ))}
+
+            {filteredThreads.length === 0 && (
+              <li className="px-4 py-12 text-center">
+                <p className="text-sm text-slate-400">No threads matched your search.</p>
+                <p className="text-xs text-slate-500 mt-2">
+                  Try another search term or switch buckets.
+                </p>
+              </li>
+            )}
           </ul>
         </section>
 
@@ -381,7 +419,7 @@ function App() {
               <textarea
                 value={newBucketDescription}
                 onChange={(e) => setNewBucketDescription(e.target.value)}
-                placeholder="e.g. Expenses, invoices, receipts, and other money-related updates."
+                placeholder="e.g. Expenses, invoices, receipts, charges, and billing emails."
                 rows={4}
                 className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400 resize-none"
               />
