@@ -1,4 +1,4 @@
-export type BucketId =
+export type DefaultBucketId =
   | "important"
   | "needs_reply"
   | "can_wait"
@@ -7,6 +7,8 @@ export type BucketId =
   | "recruiting"
   | "receipts"
   | "travel";
+
+export type BucketId = DefaultBucketId | string;
 
 export interface Thread {
   id: string;
