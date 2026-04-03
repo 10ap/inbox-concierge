@@ -16,4 +16,6 @@ export interface Thread {
   date: string;
   unread: boolean;
   bucket: BucketId;
+  confidence: number;
+  reason: string;
 }
