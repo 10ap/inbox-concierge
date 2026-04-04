@@ -13,7 +13,7 @@ gmailRouter.get("/threads", async (req, res) => {
     const threads = await fetchThreads(tokens);
     res.json({ threads });
   } catch (err: any) {
-    console.error("Gmail fetch error:", err.message);
-    res.status(500).json({ error: "Failed to fetch threads" });
+    console.error("Gmail fetch error:", err.message, err.stack);
+    res.status(500).json({ error: "Failed to fetch threads", detail: err.message });
   }
 });

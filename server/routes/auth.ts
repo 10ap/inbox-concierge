@@ -51,10 +51,12 @@ authRouter.get("/google/callback", async (req, res) => {
     (req.session as any).tokens = tokens;
     (req.session as any).email = userInfo.email;
 
-    res.redirect("/?auth=success");
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    res.redirect(`${frontendUrl}/?auth=success`);
   } catch (err) {
     console.error("OAuth callback error:", err);
-    res.redirect("/?auth=error");
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    res.redirect(`${frontendUrl}/?auth=error`);
   }
 });
 
