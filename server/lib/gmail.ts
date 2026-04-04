@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import type { Credentials } from "google-auth-library";
 import type { OAuth2Client } from "google-auth-library";
 import pLimit from "p-limit";
 
@@ -11,7 +12,7 @@ export interface GmailThread {
   unread: boolean;
 }
 
-function createOAuth2Client(tokens: any): OAuth2Client {
+function createOAuth2Client(tokens: Credentials): OAuth2Client {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -21,15 +22,17 @@ function createOAuth2Client(tokens: any): OAuth2Client {
   return oauth2Client;
 }
 
-function getHeader(headers: { name?: string | null; value?: string | null }[] | undefined, name: string): string {
+function getHeader(
+  headers: { name?: string | null; value?: string | null }[] | undefined,
+  name: string
+): string {
   return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
-export async function fetchThreads(tokens: any): Promise<GmailThread[]> {
+export async function fetchThreads(tokens: Credentials): Promise<GmailThread[]> {
   const auth = createOAuth2Client(tokens);
   const gmail = google.gmail({ version: "v1", auth });
 
-  // Fetch thread list
   const listRes = await gmail.users.threads.list({
     userId: "me",
     maxResults: 200,
@@ -38,7 +41,6 @@ export async function fetchThreads(tokens: any): Promise<GmailThread[]> {
   const threadItems = listRes.data.threads || [];
   if (threadItems.length === 0) return [];
 
-  // Fetch thread details concurrently (limit to 20 at a time)
   const limit = pLimit(20);
 
   const threads = await Promise.all(

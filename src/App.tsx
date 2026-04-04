@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { mockThreads } from "./data/mockThreads";
 import type { Thread, BucketId, DefaultBucketId } from "./types/thread";
 import { useAuth } from "./hooks/useAuth";
@@ -41,7 +41,10 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isReclassifying, setIsReclassifying] = useState(false);
 
-  const allBuckets = [...DEFAULT_BUCKETS, ...customBuckets];
+  const allBuckets = useMemo(
+    () => [...DEFAULT_BUCKETS, ...customBuckets],
+    [customBuckets]
+  );
 
   // When user authenticates, fetch + classify real threads
   useEffect(() => {
@@ -96,6 +99,11 @@ function App() {
     }, {});
   }, [threads]);
 
+  const formatBucketLabel = useCallback(
+    (bucketId: string) => bucketLabelMap[bucketId] ?? prettifyBucketId(bucketId),
+    [bucketLabelMap]
+  );
+
   const filteredThreads = useMemo(() => {
     const bucketFiltered =
       selectedBucket === "all" ? threads : threads.filter((t) => t.bucket === selectedBucket);
@@ -105,11 +113,7 @@ function App() {
       const haystack = `${t.subject} ${t.snippet} ${t.from} ${formatBucketLabel(t.bucket)}`.toLowerCase();
       return haystack.includes(query);
     });
-  }, [threads, selectedBucket, searchQuery, bucketLabelMap]);
-
-  function formatBucketLabel(bucketId: string) {
-    return bucketLabelMap[bucketId] ?? prettifyBucketId(bucketId);
-  }
+  }, [threads, selectedBucket, searchQuery, formatBucketLabel]);
 
   function formatBucketDescription(bucketId: string) {
     return bucketDescriptionMap[bucketId] || "User-defined category for inbox triage.";
@@ -125,7 +129,7 @@ function App() {
     setNewBucketDescription("");
   }
 
-  function handleCreateBucket() {
+  async function handleCreateBucket() {
     const trimmedName = newBucketName.trim();
     const trimmedDescription = newBucketDescription.trim();
     if (!trimmedName) return;
@@ -146,10 +150,25 @@ function App() {
       description: trimmedDescription || `Custom bucket for emails related to ${trimmedName.toLowerCase()}.`,
     };
 
+    const updatedBuckets = [...allBuckets, newBucket];
     setCustomBuckets((prev) => [...prev, newBucket]);
     setSelectedBucket(id);
-    showToast(`Created bucket "${trimmedName}".`, "success");
     resetModal();
+
+    // Auto-reclassify with the new bucket included
+    if (auth.isAuthenticated) {
+      setIsReclassifying(true);
+      try {
+        await reclassify(updatedBuckets);
+        showToast(`Created "${trimmedName}" and reclassified your inbox.`, "success");
+      } catch {
+        showToast(`Created bucket "${trimmedName}".`, "success");
+      } finally {
+        setIsReclassifying(false);
+      }
+    } else {
+      showToast(`Created bucket "${trimmedName}".`, "success");
+    }
   }
 
   async function handleReclassify() {
@@ -209,9 +228,9 @@ function App() {
   const isLoading = isLoadingThreads || isReclassifying;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
+    <div className="h-screen bg-slate-950 text-slate-100 flex overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-72 border-r border-slate-800 p-4 flex flex-col gap-4">
+      <aside className="w-72 shrink-0 border-r border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Inbox Concierge</h1>
           <p className="text-sm text-slate-400 mt-1">AI inbox triage for busy operators</p>
@@ -262,9 +281,9 @@ function App() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex">
+      <main className="flex-1 flex min-w-0 overflow-hidden">
         {/* Thread list */}
-        <section className="flex-1 border-r border-slate-800 flex flex-col">
+        <section className="flex-1 min-w-0 border-r border-slate-800 flex flex-col overflow-hidden">
           <header className="px-4 py-3 border-b border-slate-800 space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -330,7 +349,7 @@ function App() {
               ))}
             </div>
           ) : (
-            <ul className="divide-y divide-slate-800 text-sm overflow-y-auto">
+            <ul className="divide-y divide-slate-800 text-sm overflow-y-auto flex-1">
               {filteredThreads.map((thread) => (
                 <li
                   key={thread.id}
@@ -378,7 +397,7 @@ function App() {
         </section>
 
         {/* Thread detail */}
-        <section className="w-96 p-5 hidden md:block overflow-y-auto">
+        <section className="w-96 shrink-0 p-5 hidden md:block overflow-y-auto">
           {isLoading ? (
             <div className="space-y-4 animate-pulse">
               <div>

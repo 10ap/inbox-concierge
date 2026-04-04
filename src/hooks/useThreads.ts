@@ -16,6 +16,17 @@ interface Bucket {
   description: string;
 }
 
+interface Classification {
+  id: string;
+  bucket: string;
+  confidence: number;
+  reason: string;
+}
+
+interface ClassifyResponse {
+  classifications: Classification[];
+}
+
 export function useThreads() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [rawThreads, setRawThreads] = useState<GmailThread[]>([]);
@@ -27,7 +38,6 @@ export function useThreads() {
     setError(null);
 
     try {
-      // Step 1: Fetch threads from Gmail
       const gmailRes = await fetch("/api/gmail/threads", {
         credentials: "include",
       });
@@ -41,11 +51,10 @@ export function useThreads() {
       };
       setRawThreads(gmailThreads);
 
-      // Step 2: Classify threads
       const classified = await classifyThreads(gmailThreads, buckets);
       setThreads(classified);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsLoading(false);
     }
@@ -61,11 +70,13 @@ export function useThreads() {
       try {
         const classified = await classifyThreads(rawThreads, buckets);
         setThreads(classified);
-      } catch (err: any) {
-        setError(err.message || "Reclassification failed");
-      } finally {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Reclassification failed";
+        setError(message);
         setIsLoading(false);
+        throw err;
       }
+      setIsLoading(false);
     },
     [rawThreads]
   );
@@ -101,11 +112,10 @@ async function classifyThreads(
     throw new Error("Classification failed");
   }
 
-  const { classifications } = await classifyRes.json();
+  const { classifications } = (await classifyRes.json()) as ClassifyResponse;
 
-  // Merge Gmail data with classification results
-  const classMap = new Map(
-    classifications.map((c: any) => [c.id, c])
+  const classMap = new Map<string, Classification>(
+    classifications.map((c) => [c.id, c])
   );
 
   return gmailThreads.map((t) => {
@@ -117,9 +127,9 @@ async function classifyThreads(
       snippet: t.snippet,
       date: t.date,
       unread: t.unread,
-      bucket: c?.bucket || "can_wait",
-      confidence: c?.confidence || 50,
-      reason: c?.reason || "No classification available.",
+      bucket: c?.bucket ?? "can_wait",
+      confidence: c?.confidence ?? 50,
+      reason: c?.reason ?? "No classification available.",
     };
   });
 }

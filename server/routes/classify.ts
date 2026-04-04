@@ -13,8 +13,9 @@ classifyRouter.post("/classify", async (req, res) => {
   try {
     const classifications = await classifyThreads(threads, buckets);
     res.json({ classifications });
-  } catch (err: any) {
-    console.error("Classification error:", err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Classification error:", message);
     res.status(500).json({ error: "Classification failed" });
   }
 });

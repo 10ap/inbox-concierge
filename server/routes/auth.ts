@@ -15,7 +15,7 @@ function createOAuth2Client() {
 authRouter.get("/google", (req, res) => {
   const oauth2Client = createOAuth2Client();
   const state = crypto.randomBytes(16).toString("hex");
-  (req.session as any).oauthState = state;
+  req.session.oauthState = state;
 
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -35,8 +35,9 @@ authRouter.get("/google", (req, res) => {
 authRouter.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
 
-  if (!code || state !== (req.session as any).oauthState) {
-    return res.redirect("/?auth=error");
+  if (!code || state !== req.session.oauthState) {
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    return res.redirect(`${frontendUrl}/?auth=error`);
   }
 
   try {
@@ -44,12 +45,11 @@ authRouter.get("/google/callback", async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code as string);
     oauth2Client.setCredentials(tokens);
 
-    // Get user email
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: userInfo } = await oauth2.userinfo.get();
 
-    (req.session as any).tokens = tokens;
-    (req.session as any).email = userInfo.email;
+    req.session.tokens = tokens;
+    req.session.email = userInfo.email ?? undefined;
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     res.redirect(`${frontendUrl}/?auth=success`);
@@ -61,9 +61,8 @@ authRouter.get("/google/callback", async (req, res) => {
 });
 
 authRouter.get("/status", (req, res) => {
-  const tokens = (req.session as any).tokens;
-  if (tokens) {
-    res.json({ authenticated: true, email: (req.session as any).email });
+  if (req.session.tokens) {
+    res.json({ authenticated: true, email: req.session.email });
   } else {
     res.json({ authenticated: false });
   }

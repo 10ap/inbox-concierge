@@ -13,33 +13,37 @@ export function useAuth() {
     isLoading: true,
   });
 
-  const checkStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth/status", { credentials: "include" });
-      const data = await res.json();
-      setState({
-        isAuthenticated: data.authenticated,
-        email: data.email || null,
-        isLoading: false,
-      });
-    } catch {
-      setState({ isAuthenticated: false, email: null, isLoading: false });
-    }
-  }, []);
-
   useEffect(() => {
+    const controller = new AbortController();
+
+    async function checkStatus() {
+      try {
+        const res = await fetch("/api/auth/status", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setState({
+          isAuthenticated: data.authenticated,
+          email: data.email ?? null,
+          isLoading: false,
+        });
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setState({ isAuthenticated: false, email: null, isLoading: false });
+      }
+    }
+
     checkStatus();
-  }, [checkStatus]);
+    return () => controller.abort();
+  }, []);
 
   const login = useCallback(() => {
     window.location.href = "/api/auth/google";
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setState({ isAuthenticated: false, email: null, isLoading: false });
   }, []);
 
