@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { authRouter } from "./routes/auth.js";
 import { gmailRouter } from "./routes/gmail.js";
 import { classifyRouter } from "./routes/classify.js";
@@ -40,6 +42,15 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/gmail", gmailRouter);
 app.use("/api", classifyRouter);
+
+// In production, serve the built frontend
+if (isProd) {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  app.use(express.static(path.join(__dirname, "../dist")));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(__dirname, "../dist/index.html"));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
