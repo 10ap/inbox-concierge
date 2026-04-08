@@ -35,6 +35,17 @@ export function useAuth() {
     }
 
     checkStatus();
+
+    // Clean up auth query param from URL after OAuth redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("auth")) {
+      params.delete("auth");
+      const newUrl = params.toString()
+        ? `${window.location.pathname}?${params}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+
     return () => controller.abort();
   }, []);
 
