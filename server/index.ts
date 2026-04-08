@@ -12,6 +12,11 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const isProd = process.env.NODE_ENV === "production";
 
+// Trust Render's reverse proxy so secure cookies work behind TLS termination
+if (isProd) {
+  app.set("trust proxy", 1);
+}
+
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 app.use(cors({ origin: frontendUrl, credentials: true }));
 app.use(express.json({ limit: "2mb" }));
